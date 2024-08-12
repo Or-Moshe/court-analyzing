@@ -20,7 +20,7 @@ driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), opti
 driver.maximize_window()
 wait = WebDriverWait(driver, 20)
 
-output_file = 'extracted_texts.xlsx'
+output_file = 'extracted_texts_en.xlsx'
 df = pd.read_excel(output_file)
 
 def extract_judge_name(html_path):
@@ -73,18 +73,28 @@ def fill_inputs():
         driver.get("https://supreme.court.gov.il/pages/fullsearch.aspx")
         iframes = driver.find_elements(By.TAG_NAME, 'iframe')
         if iframes:
+            time.sleep(5)
             driver.switch_to.frame(iframes[0])
+
             input_elements = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'ul.select2-choices input.select2-input')))
             input1 = input_elements[0]
             input1.click()
 
 
-            li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-0-1')))
-            #li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-0-6')))
+            #li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-0-1')))
+            li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-0-6')))
             print(f"Selecting option: {li_element.text}")
             li_element.click()
             input_elements[0].send_keys(Keys.ESCAPE)
 
+            time.sleep(5)
+            driver.switch_to.default_content()
+            time.sleep(5)
+            driver.execute_script("window.scrollTo(0, 0);")
+            time.sleep(5)
+
+            driver.switch_to.frame(iframes[0])
+            time.sleep(5)
             button = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit'][ng-click='Search()']"))
             )
@@ -153,8 +163,8 @@ def files_iterator():
     df.to_excel(output_file, index=False)
 
 fill_inputs()
-#search()
-#files_iterator()
+search()
+files_iterator()
 
 #extract_judge_name("https://supremedecisions.court.gov.il/Home/Download?path=NetVerdicts/2024/8/7/2024-0-5709-3-1&fileName=21fac27aa2144f10b6ca5ed84cbdf227&type=2")
 #extract_judge_name("https://supremedecisions.court.gov.il/Home/Download?path=NetVerdicts/2024/8/6/2024-8-12457-1-2&fileName=1e10572b5db64ed38663f17d23e1bce4&type=2")
