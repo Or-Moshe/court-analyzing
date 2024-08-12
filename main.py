@@ -5,6 +5,7 @@ from webdriver_manager.chrome import  ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import pandas as pd
+from selenium.webdriver.common.keys import Keys
 
 from selenium.webdriver.common.by import By
 import time
@@ -19,7 +20,12 @@ driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), opti
 driver.maximize_window()
 wait = WebDriverWait(driver, 20)
 
+output_file = 'extracted_texts.xlsx'
+df = pd.read_excel(output_file)
+
 def extract_judge_name(html_path):
+    global df
+    data = []
     try:
         # Fetch the page content
         headers = {
@@ -32,6 +38,7 @@ def extract_judge_name(html_path):
 
         start_printing = False
         name_to_text = {}
+
         combined_names = ""
         combined_text = ""
         for p in p_elements:
@@ -49,26 +56,57 @@ def extract_judge_name(html_path):
         # Split combined_names by "כבוד" and filter out empty entries
         names_arr = [name.strip() for name in combined_names.split("כבוד") if name.strip()]
 
-        for name in names_arr:
-            name_to_text[name] = combined_text.strip()
+        for judgment_name in names_arr:
+            new_df = pd.DataFrame({
+                'Name': [judgment_name],  # Make sure values are in a list
+                'Text': [combined_text.strip()]  # The text should also be a list
+            })
+            # Concatenate the new DataFrame to the existing DataFrame
+            df = pd.concat([df, new_df], ignore_index=True)
 
-        return name_to_text
+        #return name_to_text
     except Exception as e:
         print(f"Error: {e}")
-        return {}
+    return data
 def fill_inputs():
     try:
         driver.get("https://supreme.court.gov.il/pages/fullsearch.aspx")
         iframes = driver.find_elements(By.TAG_NAME, 'iframe')
         if iframes:
             driver.switch_to.frame(iframes[0])
+            input_elements = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'ul.select2-choices input.select2-input')))
+            input1 = input_elements[0]
+            input1.click()
+
+
+            li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-0-1')))
+            #li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-0-6')))
+            print(f"Selecting option: {li_element.text}")
+            li_element.click()
+            input_elements[0].send_keys(Keys.ESCAPE)
+
+            button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit'][ng-click='Search()']"))
+            )
+            button.click()
+            # driver.switch_to.default_content()
+            # time.sleep(5)
+            # driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            # time.sleep(5)
+            # driver.switch_to.frame(iframes[0])
+
+            """
+            print(driver.page_source)
+
 
             # Wait for the element that needs to be clicked to open the dropdown
             input_elements = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'ul.select2-choices input.select2-input')))
             input1 = input_elements[0]
             input1.click()
 
-            li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-0-1')))
+            #li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-0-1')))
+            li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-0-6')))
+            print(f"Selecting option: {li_element.text}")
             li_element.click()
 
 
@@ -78,8 +116,10 @@ def fill_inputs():
             # Wait for the dropdown to be visible and get the <ul> element
             #בגץ
             li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-2-1')))
+            #פלילי
+            #li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-2-3')))
             li_element.click()
-
+            """
     except Exception as e:
         tb_str = traceback.format_exception(type(e), e, e.__traceback__)
         print("".join(tb_str))
@@ -87,9 +127,9 @@ def fill_inputs():
     #   driver.quit()
 
 def search():
-    search_button = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, 'search-button')))
+    search_button = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'search-button')))
     driver.execute_script("arguments[0].click();", search_button)
-
+    #search_button.click()
 def files_iterator():
     link_elements = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'a.file-link.html-link')))
 
@@ -97,26 +137,24 @@ def files_iterator():
     file_links = [element.get_attribute('href') for element in link_elements]
 
     # Slice the list to include only up to max_links elements
-    max_links = 50
+    max_links = 10
     limited_links = file_links[:max_links]
     all_name_to_text = {}
+    all_data = []
+    names = []
     for link in limited_links:
         print(f"File link: {link}")
         time.sleep(10)
-        current_name_to_text = extract_judge_name(link)
+        current_data = extract_judge_name(link)
+        all_data.append(current_data)
+        #for name, text in current_name_to_text.items():
+         #   all_name_to_text[name] = text
 
-        for name, text in current_name_to_text.items():
-            all_name_to_text[name] = text
-
-    print(all_name_to_text)
-    df = pd.DataFrame(list(all_name_to_text.items()), columns=['Name', 'Text'])
-    output_file = 'extracted_texts.xlsx'
     df.to_excel(output_file, index=False)
 
-
 fill_inputs()
-search()
-files_iterator()
+#search()
+#files_iterator()
 
 #extract_judge_name("https://supremedecisions.court.gov.il/Home/Download?path=NetVerdicts/2024/8/7/2024-0-5709-3-1&fileName=21fac27aa2144f10b6ca5ed84cbdf227&type=2")
 #extract_judge_name("https://supremedecisions.court.gov.il/Home/Download?path=NetVerdicts/2024/8/6/2024-8-12457-1-2&fileName=1e10572b5db64ed38663f17d23e1bce4&type=2")
