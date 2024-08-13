@@ -25,7 +25,6 @@ df = pd.read_excel(output_file)
 
 def extract_judge_name(html_path):
     global df
-    data = []
     try:
         # Fetch the page content
         headers = {
@@ -33,41 +32,43 @@ def extract_judge_name(html_path):
         }
         response = requests.get(html_path, headers=headers, timeout=10)
         html_content = response.content
-        soup = BeautifulSoup(html_content, 'html.parser')
-        p_elements = soup.find_all('p')
+        soup = BeautifulSoup(html_content, 'lxml')
 
-        start_printing = False
-        name_to_text = {}
+        # Use regular expression to capture patterns that include optional whitespace characters
+        pattern = re.compile(r'The\s+Honorable', re.IGNORECASE)
 
-        combined_names = ""
+        # Extract paragraphs that contain the specified pattern
+        names_mentions = [p.get_text().strip() for p in soup.find_all('p') if pattern.search(p.get_text())]
+
+        # Print the extracted names
+        print('names_mentions', names_mentions)
+
+        titles = ['פסק-דין', 'החלטה', 'J U D G M E N T', 'JUDGMENT', 'Judgment' , 'Judgment and Decision', 'Interim Decision', 'Partial Judgment']
+        capturing = False
         combined_text = ""
-        for p in p_elements:
-            p_text = p.get_text().strip()
-            if any(title in p_text for title in ['פסק-דין', 'החלטה']):
-                start_printing = True
-                continue  # Skip the current element containing "פסק-דין"
+        for p in soup.find_all('p'):
+            text = p.get_text().strip()
+            # Check if the current paragraph is a title
+            if any(title in text for title in titles):
+                capturing = True
+                continue  # Skip the title itself
+            # If capturing is enabled, save the text
+            if capturing:
+                if text:  # Ensure not to capture empty paragraphs
+                    combined_text += text + "\n"
 
-            if start_printing:
-                combined_text += p_text + "\n"
+        if combined_text == "":
+            print('NOT FOUND')
+        local_df = pd.DataFrame({
+            'Name': names_mentions,
+            'Text': [combined_text] * len(names_mentions)
+        })
 
-            if p_text.startswith("כבוד"):
-                combined_names += p_text + " "
+        df = pd.concat([df, local_df], ignore_index=True)
+        df.to_excel(output_file, index=False)
 
-        # Split combined_names by "כבוד" and filter out empty entries
-        names_arr = [name.strip() for name in combined_names.split("כבוד") if name.strip()]
-
-        for judgment_name in names_arr:
-            new_df = pd.DataFrame({
-                'Name': [judgment_name],  # Make sure values are in a list
-                'Text': [combined_text.strip()]  # The text should also be a list
-            })
-            # Concatenate the new DataFrame to the existing DataFrame
-            df = pd.concat([df, new_df], ignore_index=True)
-
-        #return name_to_text
     except Exception as e:
         print(f"Error: {e}")
-    return data
 def fill_inputs():
     try:
         driver.get("https://supreme.court.gov.il/pages/fullsearch.aspx")
@@ -86,6 +87,7 @@ def fill_inputs():
             print(f"Selecting option: {li_element.text}")
             li_element.click()
             input_elements[0].send_keys(Keys.ESCAPE)
+
 
             time.sleep(5)
             driver.switch_to.default_content()
@@ -147,7 +149,7 @@ def files_iterator():
     file_links = [element.get_attribute('href') for element in link_elements]
 
     # Slice the list to include only up to max_links elements
-    max_links = 10
+    max_links = 5000
     limited_links = file_links[:max_links]
     all_name_to_text = {}
     all_data = []
@@ -155,18 +157,19 @@ def files_iterator():
     for link in limited_links:
         print(f"File link: {link}")
         time.sleep(10)
+        extract_judge_name(link)
+        """
         current_data = extract_judge_name(link)
         all_data.append(current_data)
-        #for name, text in current_name_to_text.items():
-         #   all_name_to_text[name] = text
 
     df.to_excel(output_file, index=False)
+    """
 
 fill_inputs()
 search()
 files_iterator()
 
-#extract_judge_name("https://supremedecisions.court.gov.il/Home/Download?path=NetVerdicts/2024/8/7/2024-0-5709-3-1&fileName=21fac27aa2144f10b6ca5ed84cbdf227&type=2")
+#extract_judge_name("https://supremedecisions.court.gov.il/Home/Download?path=EnglishVerdicts/20/440/021/v26&fileName=20021440.V26&type=2")
 #extract_judge_name("https://supremedecisions.court.gov.il/Home/Download?path=NetVerdicts/2024/8/6/2024-8-12457-1-2&fileName=1e10572b5db64ed38663f17d23e1bce4&type=2")
 """
 try:
