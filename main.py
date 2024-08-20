@@ -88,6 +88,12 @@ def fill_inputs():
             li_element.click()
             input_elements[0].send_keys(Keys.ESCAPE)
 
+            input2 = input_elements[2]
+            input2.click()
+
+            #פלילי
+            li_element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#ui-select-choices-row-2-3')))
+            li_element.click()
 
             time.sleep(5)
             driver.switch_to.default_content()
