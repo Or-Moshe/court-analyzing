@@ -22,53 +22,37 @@ wait = WebDriverWait(driver, 20)
 
 output_file = 'extracted_texts_en.xlsx'
 df = pd.read_excel(output_file)
-
-def extract_judge_name(html_path):
-    global df
+data_list = []
+def extract_data(html_path):
     try:
         # Fetch the page content
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
         }
         response = requests.get(html_path, headers=headers, timeout=10)
+        response.raise_for_status()  # Raise an HTTPError for bad responses
         html_content = response.content
         soup = BeautifulSoup(html_content, 'lxml')
+        all_p = soup.find_all('p')
 
-        # Use regular expression to capture patterns that include optional whitespace characters
-        pattern = re.compile(r'The\s+Honorable', re.IGNORECASE)
-
-        # Extract paragraphs that contain the specified pattern
-        names_mentions = [p.get_text().strip() for p in soup.find_all('p') if pattern.search(p.get_text())]
-
-        # Print the extracted names
-        print('names_mentions', names_mentions)
-
-        titles = ['פסק-דין', 'החלטה', 'J U D G M E N T', 'JUDGMENT', 'Judgment' , 'Judgment and Decision', 'Interim Decision', 'Partial Judgment']
-        capturing = False
-        combined_text = ""
-        for p in soup.find_all('p'):
-            text = p.get_text().strip()
-            # Check if the current paragraph is a title
-            if any(title in text for title in titles):
-                capturing = True
-                continue  # Skip the title itself
-            # If capturing is enabled, save the text
-            if capturing:
-                if text:  # Ensure not to capture empty paragraphs
-                    combined_text += text + "\n"
-
-        if combined_text == "":
-            print('NOT FOUND')
-        local_df = pd.DataFrame({
-            'Name': names_mentions,
-            'Text': [combined_text] * len(names_mentions)
-        })
-
-        df = pd.concat([df, local_df], ignore_index=True)
-        df.to_excel(output_file, index=False)
-
+        for p in all_p:
+            text = p.get_text()
+            if "Before:" in text:
+                extracted_texts = [p.get_text() for p in all_p]
+                data_list.append({'Text': '\n'.join(extracted_texts)})
+                return
+    except requests.RequestException as e:
+        print(f"Error fetching the page: {e}")
+        print("Traceback:")
+        traceback.print_exc()
+    except IndexError as e:
+        print(f"Index error: {e}")
+        print("Traceback:")
+        traceback.print_exc()
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"An unexpected error occurred: {e}")
+        print("Traceback:")
+        traceback.print_exc()
 def fill_inputs():
     try:
         driver.get("https://supreme.court.gov.il/pages/fullsearch.aspx")
@@ -155,27 +139,35 @@ def files_iterator():
     file_links = [element.get_attribute('href') for element in link_elements]
 
     # Slice the list to include only up to max_links elements
-    max_links = 5000
+    max_links = 500
     limited_links = file_links[:max_links]
-    all_name_to_text = {}
-    all_data = []
-    names = []
+
     for link in limited_links:
         print(f"File link: {link}")
         time.sleep(10)
-        extract_judge_name(link)
-        """
-        current_data = extract_judge_name(link)
-        all_data.append(current_data)
+        extract_data(link)
 
-    df.to_excel(output_file, index=False)
-    """
+    try:
+        df_existing = pd.read_excel(output_file)
+    except FileNotFoundError:
+        # If file does not exist, create an empty DataFrame
+        df_existing = pd.DataFrame()
+
+    # Convert the new data list to a DataFrame
+    df_new = pd.DataFrame(data_list)
+
+    # Concatenate the existing DataFrame with the new DataFrame
+    df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+
+    # Save the combined DataFrame to the Excel file
+    df_combined.to_excel(output_file, index=False)
+
 
 fill_inputs()
 search()
 files_iterator()
 
-#extract_judge_name("https://supremedecisions.court.gov.il/Home/Download?path=EnglishVerdicts/20/440/021/v26&fileName=20021440.V26&type=2")
+#extract_data("https://supremedecisions.court.gov.il/Home/Download?path=EnglishVerdicts/09/410/101/n10&fileName=09101410_n10.txt&type=2")
 #extract_judge_name("https://supremedecisions.court.gov.il/Home/Download?path=NetVerdicts/2024/8/6/2024-8-12457-1-2&fileName=1e10572b5db64ed38663f17d23e1bce4&type=2")
 """
 try:
@@ -212,4 +204,5 @@ except Exception as e:
     print(f"Error: {e}")
 #finally:
  #   driver.quit()
+
 """
