@@ -19,7 +19,7 @@ options.add_experimental_option("detach", True)
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 driver.maximize_window()
 wait = WebDriverWait(driver, 20)
-
+iframes = []
 output_file = 'extracted_texts_en.xlsx'
 df = pd.read_excel(output_file)
 data_list = []
@@ -37,7 +37,8 @@ def extract_data(html_path):
 
         for p in all_p:
             text = p.get_text()
-            if "Before:" in text:
+            if "Before" in text:
+                print("printed")
                 extracted_texts = [p.get_text() for p in all_p]
                 data_list.append({'Text': '\n'.join(extracted_texts)})
                 return
@@ -56,6 +57,7 @@ def extract_data(html_path):
 def fill_inputs():
     try:
         driver.get("https://supreme.court.gov.il/pages/fullsearch.aspx")
+        global iframes
         iframes = driver.find_elements(By.TAG_NAME, 'iframe')
         if iframes:
             time.sleep(5)
@@ -133,19 +135,41 @@ def search():
     driver.execute_script("arguments[0].click();", search_button)
     #search_button.click()
 def files_iterator():
+    """
+    time.sleep(15)
+    driver.switch_to.default_content()
+    time.sleep(5)
+    driver.execute_script("window.scrollTo(0, 500);")
+    time.sleep(5)
+    driver.switch_to.frame(iframes[0])
+    time.sleep(5)
+    """
     link_elements = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'a.file-link.html-link')))
-
-    # Extract href attributes from all found elements
-    file_links = [element.get_attribute('href') for element in link_elements]
+    results_list = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located((By.CLASS_NAME, 'results-listing')))
 
     # Slice the list to include only up to max_links elements
-    max_links = 500
-    limited_links = file_links[:max_links]
 
-    for link in limited_links:
-        print(f"File link: {link}")
-        time.sleep(10)
-        extract_data(link)
+    if results_list:
+        last_height = driver.execute_script("return arguments[0].scrollTop;", results_list[0])
+
+        while True:
+            # Scroll down by 100 pixels until no more scroll is possible
+            driver.execute_script("arguments[0].scrollTop = arguments[0].scrollTop + 100;", results_list[0])
+            new_height = driver.execute_script("return arguments[0].scrollTop;", results_list[0])
+            link_elements = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, 'a.file-link.html-link')))
+            results_list = WebDriverWait(driver, 20).until(EC.presence_of_all_elements_located((By.CLASS_NAME, 'results-listing')))
+            file_links = [element.get_attribute('href') for element in link_elements]
+            max_links = 3
+            limited_links = file_links[:max_links]
+            print(len(file_links))
+            for link in limited_links:
+                print(f"File link: {link}")
+                time.sleep(10)
+                extract_data(link)
+            # Break the loop if no new scroll is possible
+            if new_height == last_height:
+                break
+            last_height = new_height
 
     try:
         df_existing = pd.read_excel(output_file)
